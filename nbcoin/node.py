@@ -1,8 +1,14 @@
 from copy import deepcopy
+import configparser
+import requests
+
 from block import Block
 from wallet import Wallet
 from transaction import Transaction
 from blockchain import Blockchain
+
+config = configparser.ConfigParser()
+config.read('constants.ini')
 
 class Node:
 	def __init__(self, name: str = 'Lambo'):
@@ -10,7 +16,11 @@ class Node:
 		## information for every node
 		self.ring = []
 		self.current_transactions = []
-		self.utxos_of_others = {}
+		## self.utxos_of_others = {}
+
+	def set_ip_and_port(self, ip, port):
+		self.ip = ip
+		self.port = port
 
 	def set_chain(self, c: Blockchain):
 		self.chain = deepcopy(c)
@@ -25,35 +35,46 @@ class Node:
 	def get_wallet(self):
 		return self.wallet
 
+	def as_dict(self):
+		return {
+			'name': self.name,
+			'ip': self.ip,
+			'port': self.port,
+			'wallet': deepcopy(self.wallet.as_dict())
+		}
+
 	def register_bootstrap(self):
 		"""
-		should create initial trasnaction and block
+		should create initial transaction and block
 		and also save boot ip
 		and also save itself to ring
 		"""
 		## TODO!!! amount
-		self.wallet.utxos.append({'transaction_id': 0, 'type': 0, 'recipient': self.wallet.get_public_key(), 'amount': 500})
-		self.create_transaction(self.wallet.public_key, 500) ## config with number of nodes
-		b = self.mine_block(None, True, 2)
+		self.wallet.utxos.append({'transaction_hash': 0, 'type': 0, 'recipient': self.wallet.get_public_key(), 'amount': 500})
+		self.create_transaction(self.wallet.public_key, 100 * int(config['EXPERIMENTS']['NODES'])) ## config with number of nodes
+		b = self.mine_block(tl = self.current_transactions, c = None, g = True, leading_zeroes = int(config['EXPERIMENTS']['MINING_DIFFICULTY']))
 		B = Blockchain()
 		B.add_block(b)
 		self.chain = B
-		self.ring.append(self)
+		self.ring.append(self.as_dict())
 
+	## send registration request to bootstrap node's address
+	def send_registration_request(self):
+		requests.post('http://127.0.0.1:5000/bootstrap/registerNode', data = self.__dict__)
 
 	## add this node to the ring, only the bootstrap node can add a node to the ring after checking his wallet and ip:port address
 	## bootstrap node informs all other nodes and gives the request node an id and 100 NBCs
 	def register_node_to_ring(self, n):
-		public_key = n.get_wallet().get_public_key()
-		ip = n.get_ip()
-		port = n.get_port()
+		public_key = n['wallet']['public_key']
+		ip = n['ip']
+		port = n['port']
 		try:
 			if(self.id == 0):
 				## Do not insert again on duplicate request
 				for n in self.ring:
-					if(n.public_key == public_key):
+					if(n['wallet']['public_key'] == public_key):
 						raise Exception("Cannot register a node that has been registered already")
-				self.ring.append({"public_key": public_key, "ip": ip, "port": port, "balance": 0})
+				self.ring.append(n.as_dict())
 				return len(self.ring)
 			else: raise Exception("Only bootstrap can register nodes")
 		except Exception as e:
@@ -64,12 +85,14 @@ class Node:
 		if(self.id != 0):
 			raise Exception('Operation only allowed to the boostrap node')
 		for n in self.ring:
+			## TODOOOO!!! AAAAAAAAAAAAAAAA WITH REQUEST WHEN I BROADCAST TO ALL NODES
 			n.ring = deepcopy(self.ring)
 
 	## After a transaction has been created, it must be broadcast by `broadcast_transaction`
 	def create_transaction(self, recipient_address, amount: float):
 		## TODO check if recipient_address exists
-		if(amount <= 0): raise Exception("Invalid amount")
+		if(amount <= 0):
+			raise Exception("Invalid amount")
 		## Checking upon reception is different this is for a transaction that is broadcast
 		## Determine source of "Inputs"
 		utxo_sum = 0
@@ -104,11 +127,16 @@ class Node:
 		]
 
 		self.current_transactions.append(t)
+		if(len(self.current_transactions) == int(config['EXPERIMENTS']['BLOCK_CAPACITY'])):
+			temp = deepcopy(self.current_transactions)
+			self.mine_block(temp, self.chain)
+			self.current_transactions = []
 		## TODO I do not know what this does
 		## self.wallet.transactions.append(t)
 		## self.all_trans_ids.add(t.transaction_id)
 		## TODO!!! append to list and increment counter
 		## if at capacity mine
+
 
 	## Utility broadcast function, broadcasts a general message to every other node
 	## TODO use thread pool maybe
@@ -128,13 +156,13 @@ class Node:
 	def broadcast_block(self, b: Block):
 		self.broadcast(message = json.dumps(b.__dict__), urlparam = 'block')
 
-	def mine_block(self, c: Blockchain, g: bool = False, leading_zeroes: int = 4) -> Block:
+	def mine_block(self, tl: [Transaction], c: Blockchain, g: bool, leading_zeroes: int) -> Block:
 		b = Block(chain = c, genesis = g)
-		for t in self.current_transactions:
+		for t in tl:
 			b.add_transaction(t)
 		hash = b.calculate_block_hash() ## nonce is initialized to 0
 		## TODO str might be a bug
-		while(not str(hash).startswith('0')): ## condition not met
+		while(not str(hash).startswith('0' * leading_zeroes)): ## condition not met
 			b.nonce += 1 ## try next nonce
 			hash = b.calculate_block_hash()
 		b.hash = hash
@@ -144,7 +172,11 @@ class Node:
 	def receive_transaction(self, t: Transaction):
 		if(self.validate_transaction(t)):
 			## if enough transactions mine
-			self.current_block.add_transaction(t)
+			self.current_transactions.append(t)
+			if(len(self.current_transactions) == int(config['EXPERIMENTS']['BLOCK_CAPACITY'])):
+				temp = deepcopy(self.current_transactions)
+				self.mine_block(temp, self.chain)
+				self.current_transactions = []
 		else:
 			print('Transaction rejected')
 

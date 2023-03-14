@@ -3,6 +3,7 @@ import time
 import json
 from copy import deepcopy
 import binascii
+
 import Crypto
 import Crypto.Random
 from Crypto.Hash import SHA256
@@ -60,7 +61,7 @@ class Transaction:
         Hash the entire object to produce the id
         """
         ## TODO I have no idea whether this works or even is correct
-        self.transaction_hash = SHA256.new(json.dumps({'foo': 'bar'}).encode()).hexdigest()
+        self.transaction_hash = SHA256.new(json.dumps(self.__dict__, default = vars).encode('ISO-8859-2')).hexdigest()
 
     def sign_transaction(self, sender_private_key):
         """

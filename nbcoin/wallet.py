@@ -9,6 +9,7 @@ import json
 from time import time
 from urllib.parse import urlparse
 from uuid import uuid4
+from functools import reduce
 
 class Wallet:
 	"""
@@ -21,6 +22,9 @@ class Wallet:
 		self.utxos = []
 		self.completed_transactions = []
 
+	def as_dict(self):
+		## https://peps.python.org/pep-0584/#dict-d1-d2
+		return dict(self.__dict__, **{'balance': self.balance()})
 
 	def __str__(self):
 		"""
@@ -29,7 +33,10 @@ class Wallet:
 		return f'PRIVATE KEY: {self.private_key}\nPUBLIC_KEY: {self.public_key}\nTRANSACTIONS{self.completed_transactions}\n'
 
 	def balance(self) -> float:
-		return sum([u["amount"] for u in self.utxos[self.public_key]])
+		try:
+			return reduce(lambda x: x['amount'], self.utxos)
+		except Exception:
+			return 0
 
 	def get_public_key(self):
 		return self.public_key
