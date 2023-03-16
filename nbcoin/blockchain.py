@@ -1,8 +1,11 @@
+from io import StringIO
+
 class Blockchain:
     """
     """
-    def __init__(self):
-        self.chain = []
+    ## again default arg for endpoint initializaiton
+    def __init__(self, chain = []):
+        self.chain = chain
 
     def __len__(self):
         """
@@ -20,11 +23,16 @@ class Blockchain:
         if(len(self.chain) == 0):
             raise Exception("Empty Blockchain")
         ## for each transaction in the last block
+        ans = StringIO()
         for t in self.chain[-1].list_of_transactions:
-            print(t)
+            ans.write(str(t))
+        return ans.getvalue()
 
     def get_latest_block_hash(self):
-        return self.chain[-1].hash
+        if(len(self.chain) > 0):
+            return self.chain[-1].hash
+        else:
+            return 1
 
     def add_block(self, b):
         self.chain.append(b)

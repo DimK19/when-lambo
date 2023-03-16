@@ -26,6 +26,8 @@ class Wallet:
 		## https://peps.python.org/pep-0584/#dict-d1-d2
 		return dict(self.__dict__, **{'balance': self.balance()})
 
+	## https://stackoverflow.com/a/141777 TO OVERLOAD CONSTRUCTOR
+
 	def __str__(self):
 		"""
 		Wallet information and all transactions

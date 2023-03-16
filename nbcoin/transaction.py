@@ -15,21 +15,26 @@ import base64
 
 class Transaction:
 
-    def __init__(self, sender_address, sender_private_key, recipient_address, amount, transaction_inputs):
+    def __init__(self, sender_address, sender_private_key, recipient_address, amount, transaction_inputs, transaction_outputs = None, transaction_hash = None, signature = None, timestamp = None):
         ## To public key του wallet από το οποίο προέρχονται τα χρήματα
         self.sender_address = sender_address
         ## Για την υπογραφή που θα αποδεικνύει ότι ο κάτοχος του wallet δημιούργησε αυτό το transaction
-        self._sender_private_key = sender_private_key
+        self.sender_private_key = sender_private_key
         ## To public key του wallet στο οποίο θα καταλήξουν τα χρήματα
         self.recipient_address = recipient_address
         ## το ποσό που θα μεταφερθεί
         self.amount = amount
         ## for measurements
-        self.timestamp = time.time()
-        #self.transaction_inputs: λίστα από Transaction Input
+        self.timestamp = time.time() if timestamp is None else timestamp
+        ## self.transaction_inputs: λίστα από Transaction Input
         self.transaction_inputs = transaction_inputs
-        #self.transaction_outputs: λίστα από Transaction Output
-        self.generate_transaction_hash()
+        ## self.transaction_outputs: λίστα από Transaction Output
+        self.transaction_outputs = transaction_outputs
+        ## αυτό και το προηγούμενο τα έχω για τον constructor στο endpoint που
+        ## χρησιμοποιεί τα δεδομένα του request
+        self.signature = signature
+        if(transaction_hash is None): self.generate_transaction_hash()
+        else: self.transaction_hash = transaction_hash
 
     def __str__(self):
         try:

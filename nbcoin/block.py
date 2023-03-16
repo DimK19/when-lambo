@@ -1,6 +1,7 @@
 import time
 import json
 import configparser
+from copy import deepcopy
 
 from Crypto.Hash import SHA256
 
@@ -12,29 +13,13 @@ config = configparser.ConfigParser()
 config.read('constants.ini')
 
 class Block:
-	def __init__(self, chain: Blockchain, genesis: bool = False):
+	## default args for initialization in controller
+	def __init__(self, previous_hash = 1, genesis: bool = False, timestamp = None, nonce = 0, list_of_transactions = []):
 		self.genesis = genesis
-		if(chain is None):
-			if(genesis):
-				self.previous_hash = 1
-				self.nonce = 0
-				self.index = 0
-			else:
-				raise Exception("Cannot append to empty blockchain")
-		else:
-			if(genesis):
-				raise Exception("Cannot add genesis block to existing blockchain")
-			else:
-				self.previous_hash = chain.get_latest_block_hash()
-				self.nonce = nonce
-				self.index = len(c)
-
-		self.timestamp = time.time()
-		self.previous_hash = None
-		self.timestamp = time.time()
-		self.hash = None
-		self.nonce = 0
-		self.list_of_transactions = []
+		if(timestamp is None): self.timestamp = time.time()
+		self.previous_hash = previous_hash
+		self.nonce = nonce
+		self.list_of_transactions = deepcopy(list_of_transactions)
 		self.capacity = int(config['EXPERIMENTS']['BLOCK_CAPACITY'])
 
 	def __len__(self):
@@ -43,8 +28,9 @@ class Block:
 	def __str__(self):
 		return f'BLOCK HASH: {self.hash}\nPREVIOUS HASH: {self.previous_hash}\nTRANSACTIONS: {self.list_of_transactions}\n'
 
+	## calculate block hash
 	## do not assign to self.hash immediately, helps with validation
-	def calculate_block_hash(self):
+	def __hash__(self):
 		## https://stackoverflow.com/q/3768895
 		## https://stackoverflow.com/a/64469761
 		return SHA256.new(json.dumps(self.__dict__, default = vars).encode('ISO-8859-2')).hexdigest()
