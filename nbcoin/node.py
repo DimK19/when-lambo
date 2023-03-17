@@ -3,6 +3,10 @@ import configparser
 import requests
 from time import perf_counter, sleep
 import json
+import base64
+
+from Crypto.PublicKey import RSA
+from Crypto.Signature import PKCS1_v1_5, pkcs1_15
 
 from block import Block
 from wallet import Wallet
@@ -64,13 +68,13 @@ class Node:
 		and also save itself to ring
 		"""
 		self.id = 0
-		## TODO!!! amount
-		self.wallet.utxos.append({'transaction_hash': 0, 'type': 0, 'recipient': self.wallet.get_public_key(), 'amount': 100 * int(config['EXPERIMENTS']['NODES'])})
-		self.create_transaction(self.wallet.public_key, 100 * int(config['EXPERIMENTS']['NODES'])) ## config with number of nodes
-		b = self.mine_block(tl = deepcopy(self.current_transactions), c = self.chain, g = True, leading_zeroes = int(config['EXPERIMENTS']['MINING_DIFFICULTY']))
-		B = Blockchain()
-		B.add_block(b)
-		self.chain = B
+		self.wallet.utxos.append(
+			{
+				'transaction_hash': 0,
+				'amount': 100 * int(config['EXPERIMENTS']['NODES']),
+				'recipient_public_key': self.wallet.public_key
+			}
+		)
 		self.ring.append(self)
 
 	## send registration request to bootstrap node's address
@@ -106,30 +110,59 @@ class Node:
 		except Exception as e:
 			print(e)
 
+
+	## create initial transaction to boostrap and genesis block
+	def create_genesis(self):
+		## self.create_transaction(self.wallet.public_key, 100 * int(config['EXPERIMENTS']['NODES']))
+		## create seminal transaction manually not with the function I can't
+		## be bothered to fix it
+		t = Transaction(
+			sender_public_key = self.wallet.public_key,
+			sender_private_key = self.wallet.private_key,
+			recipient_public_key = self.wallet.public_key,
+			amount = 100 * int(config['EXPERIMENTS']['NODES']),
+			transaction_inputs = None
+		)
+		t.transaction_hash = 0
+		self.current_transactions.append(t)
+		if(len(self.current_transactions) == int(config['EXPERIMENTS']['BLOCK_CAPACITY'])):
+			temp = deepcopy(self.current_transactions)
+			self.mine_block(temp, self.chain)
+			self.current_transactions = []
+
+		b = self.mine_block(
+			tl = deepcopy(self.current_transactions),
+			c = self.chain,
+			g = True,
+			leading_zeroes = int(config['EXPERIMENTS']['MINING_DIFFICULTY'])
+		)
+		B = Blockchain()
+		B.add_block(b)
+		self.chain = B
+
 	## send complete ring to all nodes
-	## send first block with genesis transaction
-	## create transactions and broadcast them
 	def initialize_network(self):
 		if(not len(self.ring) == int(config['EXPERIMENTS']['NODES'])):
 			print('NOT ENOUGH NODES')
 			return
 		print('ENOUGH NODES - INITIALIZING NETWORK')
+		self.ring.sort(key = lambda x: x.id)
 		for n in self.ring:
 			if(n.id == 0): continue
 			request_url = f'http://{n.ip}:{n.port}/node/ring'
 			r = deepcopy(self.ring)
 			serializable = [x.as_dict() for x in r]
-			## print(serializable)
 			requests.post(request_url, json = json.dumps({'ring': serializable}))
 			sleep(5)
-		## self.broadcast_transaction(self.chain[0].list_of_transactions[0])
+
+	## send first block with genesis transaction
+	## create transactions and broadcast them
+	def send_genesis(self):
 		## self.broadcast_block()
-		print('before broadcast chain')
 		self.broadcast_chain()
-		print('after broadcast chain')
 		for n in self.ring:
+			if(n.id == 0): continue
 			self.create_transaction(n.wallet.public_key, 100)
-			print('after create trasaction')
 			## TODO there might be an issue with flushing the list
 			self.broadcast_transaction(self.current_transactions[-1])
 
@@ -145,8 +178,10 @@ class Node:
 			requests.post(request_url, json = json.dumps({'ring': serializable}))
 
 	## After a transaction has been created, it must be broadcast by `broadcast_transaction`
-	def create_transaction(self, recipient_address, amount: float):
-		## TODO check if recipient_address exists
+	def create_transaction(self, recipient_public_key, amount: float) -> Transaction:
+		print(f'I am {self.name} and my atxos are')
+		print(self.wallet.utxos)
+		## TODO check if recipient address exists
 		if(amount <= 0):
 			raise Exception("Invalid amount")
 		## Checking upon reception is different this is for a transaction that is broadcast
@@ -158,29 +193,44 @@ class Node:
 			utxo_sum += utxo['amount']
 			if(utxo_sum >= amount): break
 
+		## find sender and recipient in ring - will be useful later
+		sender_in_ring = None
+		recipient_in_ring = None
+		for n in self.ring:
+			if(n.wallet.public_key == recipient_public_key):
+				recipient_in_ring = n
+			if(n.wallet.public_key == self.wallet.public_key):
+				sender_in_ring = n
+
 		## remove utxos from inputs, the change will be returned as output of the new transaction
 		for utxo in transaction_inputs:
 			self.wallet.utxos.remove(utxo)
 
 		## Validation is for receved transactions not sent
-		t = Transaction(self.wallet.get_public_key(), self.wallet.private_key, recipient_address, amount, transaction_inputs)
+		t = Transaction(self.wallet.get_public_key(), self.wallet.private_key, recipient_public_key, amount, transaction_inputs)
 		t.sign_transaction(self.wallet.private_key)
 
 		## create outputs
 		t.transaction_outputs = [
 			{
 				'transaction_hash': t.transaction_hash,
-				'type' : 0,
-				'recipient': t.recipient_address,
-				'amount': t.amount
+				'amount': t.amount,
+				'recipient_public_key': t.recipient_public_key
 			},
 			{
 				'transaction_hash': t.transaction_hash,
-				'type' : 1,
-				'recipient': t.sender_address,
-				'amount': utxo_sum - t.amount
+				'amount': utxo_sum - t.amount,
+				'recipient_public_key': t.sender_public_key
 			}
 		]
+
+		## update personal atxo in wallet
+		## and both atxos in ring
+		self.wallet.utxos.append(t.transaction_outputs[1])
+		recipient_in_ring.wallet.utxos.append(t.transaction_outputs[0])
+		self.ring.remove(sender_in_ring)
+		self.ring.append(self)
+		self.ring.sort(key = lambda x: x.id)
 
 		self.current_transactions.append(t)
 		if(len(self.current_transactions) == int(config['EXPERIMENTS']['BLOCK_CAPACITY'])):
@@ -192,6 +242,8 @@ class Node:
 		## self.all_trans_ids.add(t.transaction_id)
 		## TODO!!! append to list and increment counter
 		## if at capacity mine
+		print(f'I, {self.name}, created the following transaction:\n{t}')
+		return t
 
 
 	## Utility broadcast function, broadcasts a general message to every other node
@@ -207,13 +259,13 @@ class Node:
 			requests.post(request_url, json = message) ##, headers = headers)
 
 	def broadcast_transaction(self, t: Transaction):
-		self.broadcast(message = json.dumps(t.__dict__, default = vars), urlparam = 'transaction')
+		self.broadcast(message = json.dumps(t.as_dict()), urlparam = 'transaction')
 
 	def broadcast_block(self, b: Block):
-		self.broadcast(message = json.dumps(b.__dict__, default = vars), urlparam = 'block')
+		self.broadcast(message = json.dumps(b.as_dict()), urlparam = 'block')
 
 	def broadcast_chain(self):
-		self.broadcast(message = json.dumps(self.chain.__dict__, default = vars), urlparam = 'chain')
+		self.broadcast(message = json.dumps(self.chain.as_dict()), urlparam = 'chain')
 
 	def mine_block(self, tl: [Transaction], c: Blockchain, g: bool, leading_zeroes: int) -> Block:
 		b = Block(genesis = g, previous_hash = c.get_latest_block_hash(), list_of_transactions = tl)
@@ -250,34 +302,58 @@ class Node:
 
 	## TODO I have no idea what this does just fking copied it
 	## Please find out
-	def verify_signature(self, t: Transaction):
-		RSAkey = RSA.importKey(t.sender_address.encode())
-		verifier = PKCS1_v1_5.new(RSAkey)
-		return verifier.verify(t.transaction_id, base64.b64decode(t.signature))
+	def verify_signature(self, t: Transaction) -> bool:
+		key = RSA.import_key(t.sender_public_key)
+		h = t.generate_transaction_hash()
+		signature = t.signature
+		try:
+			pkcs1_15.new(key).verify(h, signature)
+			print("The signature is valid.")
+			return True
+		except (ValueError, TypeError) as e:
+			print(e)
+		return False
 
 	def validate_transaction(self, t: Transaction) -> bool:
 		## transaction to self not allowed, initial bootstrap transaction not validated
-		if(t.recipient_address == self.wallet.public_key):
+		if(t.recipient_public_key == t.sender_public_key):
+			print('rejected because of same sender and recipient')
 			return False
-		## Insufficient funds
-		temp = None
-		for i in self.ring:
-			if(i.wallet.public_key == t.sender_address):
-				temp = i
-				break
 
-		if(temp.wallet.balance() < t.amount):
+		## find sender and recipient in ring - will be useful later
+		sender_in_ring = None
+		recipient_in_ring = None
+		for i in self.ring:
+			if(i.wallet.public_key == t.sender_public_key):
+				sender_in_ring = i
+			if(i.wallet.public_key == t.recipient_public_key):
+				recipient_in_ring = i
+		## Insufficient funds
+		if(sender_in_ring.wallet.balance() < t.amount):
+			print('rejected for insufficient funds')
 			return False
+		print('according to my data the sender has')
+		print(sender_in_ring.wallet.utxos)
+		print('his inputs')
+		print(t.transaction_inputs)
+		print('his outputs are')
+		print(t.transaction_outputs)
 		## signature and inputs - outputs
 		if(not self.verify_signature(t)):
+			print('rejected because of signature')
 			return False
+		'''
 		for utxo in t.transaction_inputs:
-			if(not utxo in all_nodes_utxos[t.sender_address]):
+			if(not utxo in sender_in_ring.wallet.utxos):
+				print('rejected for atxos')
 				return False
+		'''
 		for utxo in t.transaction_inputs:
-			all_nodes_utxos[t.sender_address].remove(utxo)
-		all_nodes_utxos[t.recipient_address].append(t.transaction_outputs[0])
-		all_nodes_utxos[t.sender_address].append(t.transaction_outputs[1])
+			sender_in_ring.wallet.utxos.remove(utxo)
+		recipient_in_ring.wallet.utxos.append(t.transaction_outputs[0])
+		sender_in_ring.wallet.utxos.append(t.transaction_outputs[1])
+		if(self == recipient_in_ring):
+			self.wallet.utxos.append(t.transaction_outputs[0])
 		return True
 
 	## Upon receiving block
@@ -341,7 +417,7 @@ class Node:
 		return str(b.hash).startswith('0' * diff)
 
 	def get_chain(self) -> Blockchain:
-		return self.chain.__dict__
+		return self.chain.as_dict()
 
 	## consensus functions
 	## also maybe thread pool

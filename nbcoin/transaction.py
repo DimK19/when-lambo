@@ -8,20 +8,31 @@ import Crypto
 import Crypto.Random
 from Crypto.Hash import SHA256
 from Crypto.PublicKey import RSA
-from Crypto.Signature import PKCS1_v1_5
+from Crypto.Signature import PKCS1_v1_5, pkcs1_15
 import requests
 from flask import Flask, jsonify, request, render_template
 import base64
 
 class Transaction:
 
-    def __init__(self, sender_address, sender_private_key, recipient_address, amount, transaction_inputs, transaction_outputs = None, transaction_hash = None, signature = None, timestamp = None):
+    def __init__(
+        self,
+        sender_public_key,
+        sender_private_key,
+        recipient_public_key,
+        amount,
+        transaction_inputs,
+        transaction_outputs = None,
+        signature = None,
+        transaction_hash = None,
+        timestamp = None
+    ):
         ## To public key του wallet από το οποίο προέρχονται τα χρήματα
-        self.sender_address = sender_address
+        self.sender_public_key = sender_public_key
         ## Για την υπογραφή που θα αποδεικνύει ότι ο κάτοχος του wallet δημιούργησε αυτό το transaction
         self.sender_private_key = sender_private_key
         ## To public key του wallet στο οποίο θα καταλήξουν τα χρήματα
-        self.recipient_address = recipient_address
+        self.recipient_public_key = recipient_public_key
         ## το ποσό που θα μεταφερθεί
         self.amount = amount
         ## for measurements
@@ -32,53 +43,56 @@ class Transaction:
         self.transaction_outputs = transaction_outputs
         ## αυτό και το προηγούμενο τα έχω για τον constructor στο endpoint που
         ## χρησιμοποιεί τα δεδομένα του request
-        self.signature = signature
-        if(transaction_hash is None): self.generate_transaction_hash()
-        else: self.transaction_hash = transaction_hash
+        if(signature is not None):
+            self.signature = bytes(signature, 'ISO-8859-2')
+        else:
+            self.signature = None
+        self.transaction_hash = transaction_hash
+        self.generate_transaction_hash()
 
     def __str__(self):
         try:
-            return f'TRANSACTION {self.transaction_hash}\nSENDER: {self.sender_address}\nRECIPIENT: {self.recipient_address}\nAMOUNT:{self.amount}'
+            return f'TRANSACTION {self.transaction_hash}\nSENDER: {self.sender_public_key}\nRECIPIENT: {self.recipient_public_key}\nAMOUNT:{self.amount}\nINPUTS:{self.transaction_inputs}\nOUTPUTS:{self.transaction_outputs}'
         except Exception as e:
             print('Cannot print unsigned transaction')
-    '''
-    @staticmethod
-    def hashable_utxo(t):
-        return {
-            'transaction_id': str(t.transaction_hash),
-            'type' : 0,
-            'recipient': str(t.recipient_address),
-            'amount': t.amount
-        }
 
-    def _hashable(self):
-        return {
-            'sender_address': str(self.sender_address),
-            '_sender_private_key': str(self._sender_private_key),
-            'recipient_address': str(self.recipient_address),
-            'amount': self.amount,
-            'timestamp': self.timestamp,
-            'transaction_inputs': map(Transaction.hashable_utxo, self.transaction_inputs)
-        }
-    '''
+    def as_dict(self):
+        res = {k: self.__dict__[k] for k in self.__dict__ if(not k == 'signature')}
+        ## special case for seminal transaction
+        if(self.signature is not None):
+            res['signature'] = self.signature.decode('ISO-8859-2')
+        else:
+            res['signature'] = '0'
+        return res
+
     def generate_transaction_hash(self):
         """
         Hash the entire object to produce the id
         """
         ## TODO I have no idea whether this works or even is correct
-        self.transaction_hash = SHA256.new(json.dumps(self.__dict__, default = vars).encode('ISO-8859-2')).hexdigest()
+        ## transaction outputs cannot be included since they contain the hash itself
+        desired_keys = [
+            'sender_public_key',
+            'sender_private_key',
+            'recipient_public_key',
+            'amount',
+            'timestamp'
+        ]
+        td = sorted([str(self.__dict__[k]) for k in desired_keys])
+        self.transaction_hash = SHA256.new(json.dumps(td, default = vars).encode('ISO-8859-2')).hexdigest()
+        return SHA256.new(json.dumps(td, default = vars).encode('ISO-8859-2'))
 
     def sign_transaction(self, sender_private_key):
         """
         Sign transaction with private key
         """
-        ##object_hash = SHA256.new(data = self.transaction_hash.encode())
-        ##signer = PKCS1_v1_5.new(sender_private_key)
-        ##self.signature = base64.b64encode(signer.sign(object_hash))
-        ## return self.signature
-        message = self.transaction_hash.encode("ISO-8859-1")
-        key = RSA.importKey(sender_private_key.encode("ISO-8859-1"))
-        h = SHA256.new(message)
-        signer = PKCS1_v1_5.new(key)
-        self.signature = signer.sign(h).decode('ISO-8859-1')
+        '''
+        object_hash = SHA256.new(data = self.transaction_hash.encode())
+        signer = PKCS1_v1_5.new(sender_private_key)
+        self.signature = base64.b64encode(signer.sign(object_hash))
+        return self.signature
+        '''
+        key = RSA.import_key(self.sender_private_key)
+        h = self.generate_transaction_hash()
+        self.signature = pkcs1_15.new(key).sign(h)
         return self.signature

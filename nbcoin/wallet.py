@@ -10,6 +10,7 @@ from time import time
 from urllib.parse import urlparse
 from uuid import uuid4
 from functools import reduce
+from copy import deepcopy
 
 class Wallet:
 	"""
@@ -24,7 +25,7 @@ class Wallet:
 
 	def as_dict(self):
 		## https://peps.python.org/pep-0584/#dict-d1-d2
-		return dict(self.__dict__, **{'balance': self.balance()})
+		return dict(deepcopy(self.__dict__), **{'balance': self.balance()})
 
 	## https://stackoverflow.com/a/141777 TO OVERLOAD CONSTRUCTOR
 
@@ -32,11 +33,11 @@ class Wallet:
 		"""
 		Wallet information and all transactions
 		"""
-		return f'PRIVATE KEY: {self.private_key}\nPUBLIC_KEY: {self.public_key}\nTRANSACTIONS{self.completed_transactions}\n'
+		return f'PRIVATE KEY: {self.private_key}\nPUBLIC_KEY: {self.public_key}\nTRANSACTIONS: {self.completed_transactions}\nUTXOS: {self.utxos}\n'
 
 	def balance(self) -> float:
 		try:
-			return reduce(lambda x: x['amount'], self.utxos)
+			return reduce(lambda accumulator, x: accumulator + x['amount'], self.utxos, 0)
 		except Exception:
 			return 0
 

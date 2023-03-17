@@ -33,7 +33,26 @@ class Block:
 	def __hash__(self):
 		## https://stackoverflow.com/q/3768895
 		## https://stackoverflow.com/a/64469761
-		return SHA256.new(json.dumps(self.__dict__, default = vars).encode('ISO-8859-2')).hexdigest()
+		transaction_hashes = [t.transaction_hash for t in self.list_of_transactions]
+		td = {
+			'timestamp': self.timestamp,
+			'nonce': self.nonce,
+			'previous_hash': self.previous_hash,
+			'all_transaction_hashes': transaction_hashes
+		}
+		self.hash = SHA256.new(json.dumps(td).encode()).hexdigest()
+		return SHA256.new(json.dumps(td).encode()).hexdigest()
+
+	def as_dict(self):
+		transactions = [t.as_dict() for t in self.list_of_transactions]
+		res = {
+			'genesis': self.genesis,
+			'timestamp': self.timestamp,
+			'nonce': self.nonce,
+			'previous_hash': self.previous_hash,
+			'list_of_transactions': transactions,
+			'hash': self.hash
+		}
 
 	def add_transaction(self, t: Transaction):
 		self.list_of_transactions.append(t)

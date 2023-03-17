@@ -30,7 +30,7 @@ def register_bootstrap():
     ## is_boostrap inside request
     ## name from request object
     N.set_name('Countach')
-    N.set_ip_and_port('0.0.0.0', 5000)
+    N.set_ip_and_port('127.0.0.1', 5000)
     N.generate_wallet()
     N.register_bootstrap()
     ## else register node if not bootstrap
@@ -63,6 +63,7 @@ def recreate_node(data):
     n.wallet = Wallet()
     n.wallet.private_key = data['wallet']['private_key']
     n.wallet.public_key = data['wallet']['public_key']
+    n.wallet.utxos = data['wallet']['utxos']
     return n
 
 ## bootstrap node receives request and registers node
@@ -83,6 +84,8 @@ def register_node():
 @app.route('/bootstrap/initialize', methods = ['GET'])
 def init_network():
     N.initialize_network()
+    N.create_genesis()
+    N.send_genesis()
     return {}
 
 ## receive ring from bootstrap upon initialization
@@ -92,7 +95,6 @@ def receive_ring():
     r = request_data['ring']
     r = list(map(recreate_node, r))
     N.set_ring(r)
-    print(f'set ring')
     return {}
 
 ## return chain of node for conflict resolution
@@ -110,7 +112,23 @@ def test():
 ## testing
 @app.route('/transaction/test', methods = ['GET'])
 def transactiontest():
-    return json.dumps(N.chain.view_transactions())
+    return json.dumps([t.as_dict() for t in N.current_transactions])
+
+## testing
+@app.route('/transaction/create', methods = ['GET'])
+def othertest():
+    ## I will run this as id = 1 Murcielago
+    ## and try to send 50 to the two others
+    for i in N.ring:
+        if(i.id == 0):
+            recipient_public_key_1 = i.wallet.public_key
+        if(i.id == 2):
+            recipient_public_key_2 = i.wallet.public_key
+    t1 = N.create_transaction(recipient_public_key_1, amount = 50)
+    N.broadcast_transaction(t1)
+    t2 = N.create_transaction(recipient_public_key_2, amount = 50)
+    N.broadcast_transaction(t2)
+    return {}
 
 ## receive transaction
 @app.route('/transaction', methods = ['POST'])

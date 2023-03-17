@@ -1,11 +1,12 @@
 from io import StringIO
+from copy import deepcopy
 
 class Blockchain:
     """
     """
     ## again default arg for endpoint initializaiton
     def __init__(self, chain = []):
-        self.chain = chain
+        self.chain = deepcopy(chain)
 
     def __len__(self):
         """
@@ -18,6 +19,9 @@ class Blockchain:
         for i, b in enumerate(self.chain):
             res += str(i) + '\n' + str(b)
         return res
+
+    def as_dict(self):
+        return {'chain': [b.as_dict() for b in self.chain]}
 
     def view_transactions(self):
         if(len(self.chain) == 0):

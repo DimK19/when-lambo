@@ -5,3 +5,6 @@ Include/
 Lib/
 Scripts/
 pyvenv.cfg
+
+## testing
+test.py
