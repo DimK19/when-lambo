@@ -120,15 +120,16 @@ def othertest():
     ## I will run this as id = 1 Murcielago
     ## and try to send 50 to the two others
     for i in N.ring:
-        if(i.id == 0):
-            recipient_public_key_1 = i.wallet.public_key
-        if(i.id == 2):
-            recipient_public_key_2 = i.wallet.public_key
-    t1 = N.create_transaction(recipient_public_key_1, amount = 50)
-    N.broadcast_transaction(t1)
-    t2 = N.create_transaction(recipient_public_key_2, amount = 50)
-    N.broadcast_transaction(t2)
+        if(i.id != N.id):
+            recipient_public_key = i.wallet.public_key
+            t = N.create_transaction(recipient_public_key, amount = 25)
+            N.broadcast_transaction(t)
     return {}
+
+## testing
+@app.route('/node/test', methods = ['GET'])
+def test3():
+    return json.dumps({'name': N.name, 'balance': N.wallet.balance()})
 
 ## receive transaction
 @app.route('/transaction', methods = ['POST'])

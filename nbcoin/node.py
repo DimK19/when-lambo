@@ -40,6 +40,10 @@ class Node:
 
 	def set_ring(self, r):
 		self.ring = r
+		## id must be updated like this because it is defined by the boostrap
+		for i in self.ring:
+			if(i.wallet.public_key == self.wallet.public_key):
+				self.set_id(i.id)
 
 	def set_id(self, id: int):
 		self.id = id
@@ -61,6 +65,14 @@ class Node:
 		}
 		return temp
 
+	def __eq__(self, other):
+		## TODO not sure if this is correct
+		return self.wallet.public_key == other.wallet.public_key
+
+	## must be defined, it is not implied that ne = not eq
+	def __ne__(self, other):
+		return not self.__eq__(other)
+
 	def register_bootstrap(self):
 		"""
 		should create initial transaction and block
@@ -75,7 +87,7 @@ class Node:
 				'recipient_public_key': self.wallet.public_key
 			}
 		)
-		self.ring.append(self)
+		self.ring.append(deepcopy(self))
 
 	## send registration request to bootstrap node's address
 	def send_registration_request(self):
@@ -229,7 +241,7 @@ class Node:
 		self.wallet.utxos.append(t.transaction_outputs[1])
 		recipient_in_ring.wallet.utxos.append(t.transaction_outputs[0])
 		self.ring.remove(sender_in_ring)
-		self.ring.append(self)
+		self.ring.append(deepcopy(self))
 		self.ring.sort(key = lambda x: x.id)
 
 		self.current_transactions.append(t)
@@ -328,6 +340,7 @@ class Node:
 				sender_in_ring = i
 			if(i.wallet.public_key == t.recipient_public_key):
 				recipient_in_ring = i
+		print(f'SENDER IN RING: {sender_in_ring.as_dict()}\nRECIPIENT: {recipient_in_ring.as_dict()}')
 		## Insufficient funds
 		if(sender_in_ring.wallet.balance() < t.amount):
 			print('rejected for insufficient funds')
@@ -349,11 +362,20 @@ class Node:
 				return False
 		'''
 		for utxo in t.transaction_inputs:
+			print(f'atxo to remove:\n{utxo}')
 			sender_in_ring.wallet.utxos.remove(utxo)
+
+		print(f'sender is {sender_in_ring.name}\nrecipient is {recipient_in_ring.name}\nand I am {self.name}')
+		if(self == recipient_in_ring):
+			print('this transaction was to me')
+			self.wallet.utxos.append(t.transaction_outputs[0])
+
 		recipient_in_ring.wallet.utxos.append(t.transaction_outputs[0])
 		sender_in_ring.wallet.utxos.append(t.transaction_outputs[1])
-		if(self == recipient_in_ring):
-			self.wallet.utxos.append(t.transaction_outputs[0])
+
+		print(f'NOW AFTER TRANSACTION SENDER HAS {sender_in_ring.wallet.utxos}')
+		print(f'NOW AFTER TRANSACTION RECIPIENT HAS {recipient_in_ring.wallet.utxos}')
+
 		return True
 
 	## Upon receiving block
