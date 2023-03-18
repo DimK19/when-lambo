@@ -122,7 +122,7 @@ def othertest():
     for i in N.ring:
         if(i.id != N.id):
             recipient_public_key = i.wallet.public_key
-            t = N.create_transaction(recipient_public_key, amount = 25)
+            t = N.create_transaction(recipient_public_key, amount = 5)
             N.broadcast_transaction(t)
     return {}
 
@@ -130,6 +130,11 @@ def othertest():
 @app.route('/node/test', methods = ['GET'])
 def test3():
     return json.dumps({'name': N.name, 'balance': N.wallet.balance()})
+
+## testing
+@app.route('/node/test4', methods = ['GET'])
+def test4():
+    return json.dumps({'response': str(N.chain)})
 
 ## receive transaction
 @app.route('/transaction', methods = ['POST'])
@@ -143,6 +148,10 @@ def receive_transaction():
 @app.route('/block', methods = ['POST'])
 def receive_block():
     request_data = json.loads(request.get_json(force = True))
+    tl = []
+    for i in request_data['list_of_transactions']:
+        tl.append(Transaction(**i))
+    request_data['list_of_transactions'] = tl
     b = Block(**request_data)
     N.receive_block(b)
     return {}
@@ -151,7 +160,14 @@ def receive_block():
 @app.route('/chain', methods = ['POST'])
 def receive_chain():
     request_data = json.loads(request.get_json(force = True))
-    c = Blockchain(**request_data)
+    bc = []
+    for b in request_data['chain']:
+        tl = []
+        for i in b['list_of_transactions']:
+            tl.append(Transaction(**i))
+        b['list_of_transactions'] = tl
+        bc.append(Block(**b))
+    c = Blockchain(bc)
     N.receive_chain(c)
     return {}
 

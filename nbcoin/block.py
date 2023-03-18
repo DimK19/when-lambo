@@ -14,19 +14,29 @@ config.read('constants.ini')
 
 class Block:
 	## default args for initialization in controller
-	def __init__(self, previous_hash = 1, genesis: bool = False, timestamp = None, nonce = 0, list_of_transactions = []):
+	def __init__(
+		self,
+		previous_hash = 1,
+		genesis: bool = False,
+		timestamp = None,
+		nonce: int = 0,
+		list_of_transactions: [Transaction] = [],
+		hash = None
+	):
 		self.genesis = genesis
 		if(timestamp is None): self.timestamp = time.time()
+		else: self.timestamp = timestamp
 		self.previous_hash = previous_hash
 		self.nonce = nonce
 		self.list_of_transactions = deepcopy(list_of_transactions)
 		self.capacity = int(config['EXPERIMENTS']['BLOCK_CAPACITY'])
+		self.hash = hash
 
 	def __len__(self):
 		return len(self.list_of_transactions)
 
 	def __str__(self):
-		return f'BLOCK HASH: {self.hash}\nPREVIOUS HASH: {self.previous_hash}\nTRANSACTIONS: {self.list_of_transactions}\n'
+		return f'BLOCK HASH: {self.hash}\nPREVIOUS HASH: {self.previous_hash}\nTRANSACTIONS: {[str(t) for t in self.list_of_transactions]}\n'
 
 	## calculate block hash
 	## do not assign to self.hash immediately, helps with validation
@@ -53,6 +63,7 @@ class Block:
 			'list_of_transactions': transactions,
 			'hash': self.hash
 		}
+		return res
 
 	def add_transaction(self, t: Transaction):
 		self.list_of_transactions.append(t)

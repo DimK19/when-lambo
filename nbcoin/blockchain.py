@@ -15,10 +15,14 @@ class Blockchain:
         return len(self.chain)
 
     def __str__(self):
-        res = 'LIST OF BLOCKS IN BLOCKCHAIN:\n'
+        res = StringIO()
+        res.write('LIST OF BLOCKS IN BLOCKCHAIN:\n')
         for i, b in enumerate(self.chain):
-            res += str(i) + '\n' + str(b)
-        return res
+            res.write('BLOCK #')
+            res.write(str(i))
+            res.write('\n')
+            res.write(str(b))
+        return res.getvalue()
 
     def as_dict(self):
         return {'chain': [b.as_dict() for b in self.chain]}

@@ -137,10 +137,6 @@ class Node:
 		)
 		t.transaction_hash = 0
 		self.current_transactions.append(t)
-		if(len(self.current_transactions) == int(config['EXPERIMENTS']['BLOCK_CAPACITY'])):
-			temp = deepcopy(self.current_transactions)
-			self.mine_block(temp, self.chain)
-			self.current_transactions = []
 
 		b = self.mine_block(
 			tl = deepcopy(self.current_transactions),
@@ -148,9 +144,12 @@ class Node:
 			g = True,
 			leading_zeroes = int(config['EXPERIMENTS']['MINING_DIFFICULTY'])
 		)
+		## print('BELOW SHOULD BE FALSE') - DEEPCOPY
+		## print(b.list_of_transactions[0] is t)
 		B = Blockchain()
 		B.add_block(b)
 		self.chain = B
+		## print(self.chain)
 
 	## send complete ring to all nodes
 	def initialize_network(self):
@@ -191,8 +190,6 @@ class Node:
 
 	## After a transaction has been created, it must be broadcast by `broadcast_transaction`
 	def create_transaction(self, recipient_public_key, amount: float) -> Transaction:
-		print(f'I am {self.name} and my atxos are')
-		print(self.wallet.utxos)
 		## TODO check if recipient address exists
 		if(amount <= 0):
 			raise Exception("Invalid amount")
@@ -247,14 +244,18 @@ class Node:
 		self.current_transactions.append(t)
 		if(len(self.current_transactions) == int(config['EXPERIMENTS']['BLOCK_CAPACITY'])):
 			temp = deepcopy(self.current_transactions)
-			self.mine_block(temp, self.chain)
+			self.mine_block(
+				tl = temp,
+				c = self.chain,
+				g = False,
+				leading_zeroes = int(config['EXPERIMENTS']['MINING_DIFFICULTY'])
+			)
 			self.current_transactions = []
 		## TODO I do not know what this does
 		## self.wallet.transactions.append(t)
 		## self.all_trans_ids.add(t.transaction_id)
 		## TODO!!! append to list and increment counter
 		## if at capacity mine
-		print(f'I, {self.name}, created the following transaction:\n{t}')
 		return t
 
 
@@ -277,13 +278,22 @@ class Node:
 		self.broadcast(message = json.dumps(b.as_dict()), urlparam = 'block')
 
 	def broadcast_chain(self):
+		##print(f'INSIDE BROADCAST CHAIN\nDATA TO BE BROADCAST {json.dumps(self.chain.as_dict())}')
+		##print(f'EVEN THOUGH THE CHAIN IS {self.chain}')
+		##print(f'AND AS DICT {self.chain.as_dict()}')
 		self.broadcast(message = json.dumps(self.chain.as_dict()), urlparam = 'chain')
 
 	def mine_block(self, tl: [Transaction], c: Blockchain, g: bool, leading_zeroes: int) -> Block:
+		##print(f'INSIDE MINE BLOCK')
+		##print('OH BOY OH BOY TIME TO MINE')
+		##print(f'MY CURRENT CHAIN IS:\n{self.chain}')
+
 		b = Block(genesis = g, previous_hash = c.get_latest_block_hash(), list_of_transactions = tl)
+		'''
 		for t in tl:
 			## the importance of deepcopy
 			b.add_transaction(t)
+		'''
 		start = perf_counter()
 		hash = b.__hash__() ## nonce is initialized to 0
 		## TODO str might be a bug
@@ -294,6 +304,7 @@ class Node:
 		print('mined block')
 		self.total_block_time += end - start
 		b.hash = hash
+		self.broadcast_block(b)
 		return b
 
 	## Upon receiving transaction
@@ -307,7 +318,12 @@ class Node:
 			self.current_transactions.append(t)
 			if(len(self.current_transactions) == int(config['EXPERIMENTS']['BLOCK_CAPACITY'])):
 				temp = deepcopy(self.current_transactions)
-				self.mine_block(temp, self.chain)
+				self.mine_block(
+					tl = temp,
+					c = self.chain,
+					g = False,
+					leading_zeroes = int(config['EXPERIMENTS']['MINING_DIFFICULTY'])
+				)
 				self.current_transactions = []
 		else:
 			print('Transaction rejected')
@@ -340,17 +356,10 @@ class Node:
 				sender_in_ring = i
 			if(i.wallet.public_key == t.recipient_public_key):
 				recipient_in_ring = i
-		print(f'SENDER IN RING: {sender_in_ring.as_dict()}\nRECIPIENT: {recipient_in_ring.as_dict()}')
 		## Insufficient funds
 		if(sender_in_ring.wallet.balance() < t.amount):
 			print('rejected for insufficient funds')
 			return False
-		print('according to my data the sender has')
-		print(sender_in_ring.wallet.utxos)
-		print('his inputs')
-		print(t.transaction_inputs)
-		print('his outputs are')
-		print(t.transaction_outputs)
 		## signature and inputs - outputs
 		if(not self.verify_signature(t)):
 			print('rejected because of signature')
@@ -361,20 +370,17 @@ class Node:
 				print('rejected for atxos')
 				return False
 		'''
+		print(f'TRANSACTION SUMMARY: {t}')
+		print(f'SENDER IN RING {sender_in_ring.wallet.utxos}')
 		for utxo in t.transaction_inputs:
-			print(f'atxo to remove:\n{utxo}')
+			print(f'ATXO TO REMOVE: {utxo}')
 			sender_in_ring.wallet.utxos.remove(utxo)
 
-		print(f'sender is {sender_in_ring.name}\nrecipient is {recipient_in_ring.name}\nand I am {self.name}')
 		if(self == recipient_in_ring):
-			print('this transaction was to me')
 			self.wallet.utxos.append(t.transaction_outputs[0])
 
 		recipient_in_ring.wallet.utxos.append(t.transaction_outputs[0])
 		sender_in_ring.wallet.utxos.append(t.transaction_outputs[1])
-
-		print(f'NOW AFTER TRANSACTION SENDER HAS {sender_in_ring.wallet.utxos}')
-		print(f'NOW AFTER TRANSACTION RECIPIENT HAS {recipient_in_ring.wallet.utxos}')
 
 		return True
 
@@ -395,7 +401,7 @@ class Node:
 		2: valid
 		"""
 		## genesis block need not be validated
-		if(self.genesis):
+		if(b.genesis):
 			return 2
 		## check that the incoming block has a valid hash
 		if(b.__hash__() != b.hash):
@@ -405,15 +411,18 @@ class Node:
 			return 0
 		## validate all transactions in block
 		## keep backup because validate_transaction alters it
+		## AHAAHHAHA NO
+		'''
 		all_nodes_utxos_backup = deepcopy(self.all_nodes_utxos)
 		for t in b.list_of_transactions:
 			if(not self.validate_transaction(t)):
 				print('Transaction validation failed - block rejected')
 				self.all_nodes_utxos = all_nodes_utxos_backup
 				return 0
+		'''
 
 		## validate proof of work
-		if(not self.validate_proof_of_work(b, config['EXPERIMENTS']['MINING_DIFFICULTY'])):
+		if(not self.validate_proof_of_work(b, int(config['EXPERIMENTS']['MINING_DIFFICULTY']))):
 			return 0
 		return 2
 
@@ -424,6 +433,7 @@ class Node:
 	def receive_chain(self, c: Blockchain):
 		## if(self.validate_chain(c)):
 		self.chain = c
+		##print(f'I AM {self.name} AND NOW MY CHAIN IS {self.chain}')
 		## TODO pretend to validate
 
 	## For a new node entering the network
