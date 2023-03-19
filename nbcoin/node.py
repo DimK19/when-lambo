@@ -4,6 +4,7 @@ import requests
 from time import perf_counter, sleep
 import json
 import base64
+import concurrent.futures
 
 from Crypto.PublicKey import RSA
 from Crypto.Signature import PKCS1_v1_5, pkcs1_15
@@ -137,13 +138,23 @@ class Node:
 		)
 		t.transaction_hash = 0
 		self.current_transactions.append(t)
-
+		with concurrent.futures.ThreadPoolExecutor() as executor:
+			future = executor.submit(
+				self.mine_block,
+				tl = deepcopy(self.current_transactions),
+				previous_hash = self.chain.get_latest_block_hash(),
+				g = False,
+				leading_zeroes = int(config['EXPERIMENTS']['MINING_DIFFICULTY'])
+			)
+			b = future.result()
+		'''
 		b = self.mine_block(
 			tl = deepcopy(self.current_transactions),
-			c = self.chain,
+			previous_hash = self.chain,
 			g = True,
 			leading_zeroes = int(config['EXPERIMENTS']['MINING_DIFFICULTY'])
 		)
+		'''
 		## print('BELOW SHOULD BE FALSE') - DEEPCOPY
 		## print(b.list_of_transactions[0] is t)
 		B = Blockchain()
@@ -244,12 +255,24 @@ class Node:
 		self.current_transactions.append(t)
 		if(len(self.current_transactions) == int(config['EXPERIMENTS']['BLOCK_CAPACITY'])):
 			temp = deepcopy(self.current_transactions)
+			with concurrent.futures.ThreadPoolExecutor() as executor:
+				future = executor.submit(
+					self.mine_block,
+					tl = temp,
+					previous_hash = self.chain.get_latest_block_hash(),
+					g = False,
+					leading_zeroes = int(config['EXPERIMENTS']['MINING_DIFFICULTY'])
+				)
+				b = future.result()
+			'''
 			self.mine_block(
 				tl = temp,
-				c = self.chain,
+				previous_hash = self.chain.get_latest_block_hash(),
 				g = False,
 				leading_zeroes = int(config['EXPERIMENTS']['MINING_DIFFICULTY'])
 			)
+			'''
+			self.chain.add_block(b)
 			self.current_transactions = []
 		## TODO I do not know what this does
 		## self.wallet.transactions.append(t)
@@ -264,12 +287,17 @@ class Node:
 	def broadcast(self, message, urlparam):
 		## headers of http post request
 		## headers = {'Content-type': 'application/json', 'Accept': 'text/plain'}
-		for n in self.ring:
-			## exclude current node
-			if (n.wallet.public_key == self.wallet.public_key): continue
-			## create URL for target node
-			request_url = f'http://{n.ip}:{n.port}/{urlparam}'
+		def send_request(request_url):
 			requests.post(request_url, json = message) ##, headers = headers)
+		responses = []
+		with concurrent.futures.ThreadPoolExecutor() as executor:
+			for n in self.ring:
+				## exclude current node
+				if (n.wallet.public_key == self.wallet.public_key): continue
+				## create URL for target node
+				request_url = f'http://{n.ip}:{n.port}/{urlparam}'
+				responses.append(executor.submit(send_request, request_url))
+				concurrent.futures.wait(responses)
 
 	def broadcast_transaction(self, t: Transaction):
 		self.broadcast(message = json.dumps(t.as_dict()), urlparam = 'transaction')
@@ -283,12 +311,12 @@ class Node:
 		##print(f'AND AS DICT {self.chain.as_dict()}')
 		self.broadcast(message = json.dumps(self.chain.as_dict()), urlparam = 'chain')
 
-	def mine_block(self, tl: [Transaction], c: Blockchain, g: bool, leading_zeroes: int) -> Block:
+	def mine_block(self, tl: [Transaction], previous_hash, g: bool, leading_zeroes: int) -> Block:
 		##print(f'INSIDE MINE BLOCK')
 		##print('OH BOY OH BOY TIME TO MINE')
 		##print(f'MY CURRENT CHAIN IS:\n{self.chain}')
 
-		b = Block(genesis = g, previous_hash = c.get_latest_block_hash(), list_of_transactions = tl)
+		b = Block(genesis = g, previous_hash = previous_hash, list_of_transactions = tl)
 		'''
 		for t in tl:
 			## the importance of deepcopy
@@ -318,12 +346,40 @@ class Node:
 			self.current_transactions.append(t)
 			if(len(self.current_transactions) == int(config['EXPERIMENTS']['BLOCK_CAPACITY'])):
 				temp = deepcopy(self.current_transactions)
+				'''
+				thr = threading.Thread(
+					target = self.mine_block,
+					args = (
+						tl = temp,
+						previous_hash = self.chain.get_latest_block_hash(),
+						g = False,
+						leading_zeroes = int(config['EXPERIMENTS']['MINING_DIFFICULTY'])
+					)
+				)
+				thr.start()
+				thr.join()
+				'''
+				## https://docs.python.org/3/library/concurrent.futures.html#concurrent.futures.Executor.submit
+				## https://stackoverflow.com/a/58829816
+				with concurrent.futures.ThreadPoolExecutor() as executor:
+					future = executor.submit(
+						self.mine_block,
+						tl = temp,
+						previous_hash = self.chain.get_latest_block_hash(),
+						g = False,
+						leading_zeroes = int(config['EXPERIMENTS']['MINING_DIFFICULTY'])
+					)
+					b = future.result()
+
+				self.chain.add_block(b)
+				'''
 				self.mine_block(
 					tl = temp,
-					c = self.chain,
+					previous_hash = self.chain.get_latest_block_hash(),
 					g = False,
 					leading_zeroes = int(config['EXPERIMENTS']['MINING_DIFFICULTY'])
 				)
+				'''
 				self.current_transactions = []
 		else:
 			print('Transaction rejected')
@@ -361,7 +417,11 @@ class Node:
 			print('rejected for insufficient funds')
 			return False
 		## signature and inputs - outputs
-		if(not self.verify_signature(t)):
+		## Running verification in thread since it's C code
+		with concurrent.futures.ThreadPoolExecutor() as executor:
+			future = executor.submit(self.verify_signature, t)
+			verified = future.result()
+		if(not verified):
 			print('rejected because of signature')
 			return False
 		'''

@@ -122,7 +122,7 @@ def othertest():
     for i in N.ring:
         if(i.id != N.id):
             recipient_public_key = i.wallet.public_key
-            t = N.create_transaction(recipient_public_key, amount = 5)
+            t = N.create_transaction(recipient_public_key, amount = 10)
             N.broadcast_transaction(t)
     return {}
 
@@ -170,6 +170,10 @@ def receive_chain():
     c = Blockchain(bc)
     N.receive_chain(c)
     return {}
+
+@app.route('/node/stats', methods = ['GET'])
+def get_statistics():
+    return json.dumps(N.get_statistics())
 
 ## run it once fore every node
 ## TODO!! DIFFERENTIATE BETWEEN BOOTSTRAP AND OTHERS IN A BETTER WAY
