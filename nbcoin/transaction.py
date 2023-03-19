@@ -59,7 +59,7 @@ class Transaction:
                 self.amount,
                 self.transaction_inputs,
                 self.transaction_outputs
-            ) + '*' * 50 + '\n'
+            ) + '*' * 100 + '\n'
             return s
         except Exception as e:
             print('Cannot print unsigned transaction')

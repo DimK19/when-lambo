@@ -38,6 +38,12 @@ class Block:
 	def __str__(self):
 		return f'BLOCK HASH: {self.hash}\nPREVIOUS HASH: {self.previous_hash}\nTRANSACTIONS: {[str(t) for t in self.list_of_transactions]}\n'
 
+	def __eq__(self, other):
+		return self.hash == other.hash
+
+	def __ne__(self, other):
+		return not self.__eq__(other)
+
 	## calculate block hash
 	## do not assign to self.hash immediately, helps with validation
 	def __hash__(self):

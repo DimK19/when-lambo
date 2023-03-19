@@ -25,7 +25,6 @@ class Node:
 		self.current_transactions = []
 		self.all_nodes_utxos = {}
 		self.total_block_time = 0
-		self.received_first_transaction = False
 		self.chain = Blockchain()
 		self.id = -1
 
@@ -55,9 +54,6 @@ class Node:
 	def generate_wallet(self):
 		## create a wallet for this node, with a public key and a private key
 		self.wallet = Wallet()
-
-	def get_wallet(self):
-		return self.wallet
 
 	def as_dict(self):
 		temp = {
@@ -216,6 +212,11 @@ class Node:
 			utxo_sum += utxo['amount']
 			if(utxo_sum >= amount): break
 
+		## dirty check to prevent negative balance
+		if(utxo_sum < amount):
+			raise Exception('Insufficient funds')
+			return
+
 		## find sender and recipient in ring - will be useful later
 		sender_in_ring = None
 		recipient_in_ring = None
@@ -227,7 +228,11 @@ class Node:
 
 		## remove utxos from inputs, the change will be returned as output of the new transaction
 		for utxo in transaction_inputs:
-			self.wallet.utxos.remove(utxo)
+			try:
+				self.wallet.utxos.remove(utxo)
+			except Exception as e:
+				## don't care
+				pass
 
 		## Validation is for receved transactions not sent
 		t = Transaction(self.wallet.get_public_key(), self.wallet.private_key, recipient_public_key, amount, transaction_inputs)
@@ -342,10 +347,6 @@ class Node:
 	def receive_transaction(self, t: Transaction):
 		if(self.validate_transaction(t)):
 			## if enough transactions mine
-			if(not self.received_first_transaction):
-				self.received_first_transaction = True
-				self.timestamp_of_first_transaction = perf_counter()
-			self.timestamp_of_latest_transaction = perf_counter()
 			self.current_transactions.append(t)
 			if(len(self.current_transactions) == int(config['EXPERIMENTS']['BLOCK_CAPACITY'])):
 				temp = deepcopy(self.current_transactions)
@@ -433,11 +434,17 @@ class Node:
 				print('rejected for atxos')
 				return False
 		'''
-		print(f'TRANSACTION SUMMARY: {t}')
-		print(f'SENDER IN RING {sender_in_ring.wallet.utxos}')
+		## at this point transaction is considered valid
+
+		## print(f'TRANSACTION SUMMARY: {t}')
+		## print(f'SENDER IN RING {sender_in_ring.wallet.utxos}')
 		for utxo in t.transaction_inputs:
-			print(f'ATXO TO REMOVE: {utxo}')
-			sender_in_ring.wallet.utxos.remove(utxo)
+			## print(f'ATXO TO REMOVE: {utxo}')
+			try:
+				sender_in_ring.wallet.utxos.remove(utxo)
+			except Exception as e:
+				## don't care
+				pass
 
 		if(self == recipient_in_ring):
 			self.wallet.utxos.append(t.transaction_outputs[0])
@@ -511,34 +518,76 @@ class Node:
 	def validate_proof_of_work(self, b: Block, diff: int) -> bool:
 		return str(b.hash).startswith('0' * diff)
 
-	def get_chain(self) -> Blockchain:
-		return self.chain.as_dict()
-
 	## consensus functions
 	## also maybe thread pool
 	## TODO what if I don't find it
 	def resolve_conflict(self):
 		max_chain = self.chain
 		max_length = len(self.chain)
-		for n in self.ring:
-			if(n.get_wallet().get_public_key() == self.wallet.get_public_key()):
-				continue
-			request_url = f'http://{n.ip}:{n.port}/node/chain'
-			res = requests.get(request_url)
-			if(res.status_code != 200):
-				raise Exception('Invalid response')
+		## concurrently get all chains from other nodes
+		res_chains = []
+		urls = [f'http://{n.ip}:{n.port}/chain']
+		def foo(url):
+			res = requests.get(url)
+			## recreate received json as blockchain object
+			bar = json.loads(res.json())
+			bc = []
+			for b in bar['chain']:
+				tl = []
+				for i in b['list_of_transactions']:
+					tl.append(Transaction(**i))
+				b['list_of_transactions'] = tl
+				bc.append(Block(**b))
+			c = Blockchain(bc)
+			return c
+		## https://stackoverflow.com/a/46144596
+		with ThreadPoolExecutor(max_workers = int(config['EXPERIMENTS']['NODES'])) as executor:
+			future_to_url = (executor.submit(foo, url) for url in urls)
+			for future in concurrent.futures.as_completed(future_to_url):
+				try:
+					data = future.result()
+					res_chains.append(data)
+				except Exception as e:
+					print(e)
+			concurrent.futures.wait(future_to_url)
 
-			## TODO this will not work but I'd rather fix it by trial and error than think how to do it
-			received_chain = res['chain']
-			received_chain_length = received_chain.get_length()
-			if(self.validate_chain(res) and received_chain_length > max_length):
-				max_length = received_chain_length
-				max_chain = res
+		## for each received chain
+		for c in res_chains:
+			## if it is not longer than own, ignore
+			if(len(c) <= max_length):
+				continue
+			## if it is longer, only validate the blocks which differ
+			## find where blocks differ
+			first_different_index = 0
+			for i, b in enumerate(self.chain()):
+				## c is the recieved chain under examination, b is the block of own chain
+				if(b != c[i]):
+					break
+				first_different_index = i + 1
+			valid = True
+			for i in range(first_different_index, len(c)):
+				if(not validate_block(c[i])):
+					valid = False
+					break
+			## if it is valid, adopt it as new chain
+			if(valid):
+				max_length = len(c)
+				max_chain = c
+
 		self.chain = max_chain
 
 	def get_statistics(self):
 		number_of_valid_transactions = len(self.chain) * int(config['EXPERIMENTS']['BLOCK_CAPACITY'])
+		timestamp_of_first_transaction = self.chain.chain[0].list_of_transactions[0].timestamp
+		timestamp_of_last_transaction = max(x.timestamp for x in self.chain.chain[-1].list_of_transactions)
+		abt = self.total_block_time / len(self.chain)
+		tp = number_of_valid_transactions / (timestamp_of_last_transaction - timestamp_of_first_transaction)
+		filename = f"../experiment_results/result_from_{self.id}_with_N{config['EXPERIMENTS']['NODES']}_D{config['EXPERIMENTS']['MINING_DIFFICULTY']}_C{config['EXPERIMENTS']['BLOCK_CAPACITY']}.txt"
+		with open(filename, 'w') as f:
+			f.write(f'Statistics from node {self.id} "{self.name}"\n')
+			f.write(f'Average block time {abt}\n')
+			f.write(f'Throughput {tp}\n')
 		return {
-			'average_block_time': self.total_block_time / len(self.chain),
-			'throughput': number_of_valid_transactions / (self.timestamp_of_latest_transaction - self.timestamp_of_first_transaction)
+			'average_block_time': abt,
+			'throughput': tp
 		}

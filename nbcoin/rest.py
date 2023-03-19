@@ -1,6 +1,9 @@
 import requests
 from argparse import ArgumentParser
 import json
+import configparser
+from time import sleep
+from random import random
 
 from flask import Flask, jsonify, request, make_response
 from flask_cors import CORS
@@ -15,6 +18,9 @@ app = Flask(__name__)
 CORS(app)
 ## B = Blockchain()
 N = Node()
+
+config = configparser.ConfigParser()
+config.read('constants.ini')
 
 ## @app.route('/bootstrap/registerSelf', methods = ['POST'])
 def register_bootstrap():
@@ -113,8 +119,11 @@ def othertest():
     for i in N.ring:
         if(i.id != N.id):
             recipient_public_key = i.wallet.public_key
-            t = N.create_transaction(recipient_public_key, amount = 10)
-            N.broadcast_transaction(t)
+            try:
+                t = N.create_transaction(recipient_public_key, amount = 10)
+                N.broadcast_transaction(t)
+            except Exception as e:
+                pass
     return make_response({}, 200)
 
 ## testing
@@ -148,29 +157,39 @@ def receive_block():
     return make_response({}, 200)
 
 ## receive chain
-@app.route('/chain', methods = ['POST'])
+@app.route('/chain', methods = ['GET', 'POST'])
 def receive_chain():
-    request_data = json.loads(request.get_json(force = True))
-    bc = []
-    for b in request_data['chain']:
-        tl = []
-        for i in b['list_of_transactions']:
-            tl.append(Transaction(**i))
-        b['list_of_transactions'] = tl
-        bc.append(Block(**b))
-    c = Blockchain(bc)
-    N.receive_chain(c)
-    return make_response({}, 200)
+    ## IF METHOD IS POST, CREATE BLOCKCHAIN OBJECT AND SET IT AS NODES CHAIN
+    if(request.method == 'POST'):
+        request_data = json.loads(request.get_json(force = True))
+        bc = []
+        for b in request_data['chain']:
+            tl = []
+            for i in b['list_of_transactions']:
+                tl.append(Transaction(**i))
+            b['list_of_transactions'] = tl
+            bc.append(Block(**b))
+        c = Blockchain(bc)
+        N.receive_chain(c)
+        return make_response({}, 200)
+    ## ELSE IF METHOD IS GET, RETURN CHAIN
+    else:
+        return make_response(jsonify(json.dumps(N.chain.as_dict())), 200)
 
+## ------------------------------------------------------------------------------------------------
 ## OPERATIONS REQUIRED FOR CLI
 @app.route('/node/transaction/create', methods = ['POST'])
 def create_transaction():
     request_data = json.loads(request.get_json(force = True))
     recipient_public_key = request_data['recipient_public_key']
     amount = request_data['amount']
-    t = N.create_transaction(recipient_public_key, amount = amount)
-    N.broadcast_transaction(t)
-    return make_response(jsonify(json.dumps(t.as_dict())), 200)
+    try:
+        t = N.create_transaction(recipient_public_key, amount = amount)
+        N.broadcast_transaction(t)
+        return make_response(jsonify(json.dumps(t.as_dict())), 200)
+    except Exception as e:
+        return make_response({}, 422)
+        ## https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/422
 
 @app.route('/node/transaction/view', methods = ['GET'])
 def view_transactions():
@@ -192,6 +211,28 @@ def get_statistics():
     return make_response(jsonify(json.dumps(N.get_statistics())), 200)
     ## https://flask.palletsprojects.com/en/2.2.x/api/#flask.make_response
     ## https://flask.palletsprojects.com/en/2.2.x/api/#flask.json.jsonify
+
+## ------------------------------------------------------------------------------------------------
+## FOR EXPERIMENTS FROM TEXT FILES
+@app.route('/experiment', methods = ['GET'])
+def conduct_experiment():
+    n = int(config['EXPERIMENTS']['NODES'])
+    id_to_key = {}
+    for i in N.ring:
+        id_to_key[i.id] = i.wallet.public_key
+    with open(f'../transactions/{n}nodes/transactions{N.id}.txt') as f:
+        for line in f:
+            recipient_id, amount = line.split()
+            recipient_public_key = id_to_key[int(recipient_id)]
+            amount = float(amount)
+            try:
+                t = N.create_transaction(recipient_public_key, amount)
+                N.broadcast_transaction(t)
+                sleep(6 * random()) ## mean 5 minutes for 100 transactions
+            except Exception as e:
+                ## print(e)
+                pass
+    return make_response({}, 200)
 
 ## run it once fore every node
 ## TODO!! DIFFERENTIATE BETWEEN BOOTSTRAP AND OTHERS IN A BETTER WAY

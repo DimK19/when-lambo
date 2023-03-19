@@ -1,0 +1,3 @@
+Statistics from node 0 "Countach"
+Average block time 0.016176594029886148
+Throughput 0.1894813364991505

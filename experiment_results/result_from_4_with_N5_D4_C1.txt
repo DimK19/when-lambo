@@ -1,0 +1,3 @@
+Statistics from node 4 "Aventador"
+Average block time 2.7688674450970105
+Throughput 0.19230941614839153
