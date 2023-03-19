@@ -2,7 +2,7 @@ import requests
 from argparse import ArgumentParser
 import json
 
-from flask import Flask, jsonify, request, render_template
+from flask import Flask, jsonify, request, make_response
 from flask_cors import CORS
 
 from block import Block
@@ -15,15 +15,6 @@ app = Flask(__name__)
 CORS(app)
 ## B = Blockchain()
 N = Node()
-
-## get all transactions in the blockchain
-@app.route('/boottest', methods = ['GET'])
-def get_transactions():
-    ## TODO all return {} should return at least a status code
-    N.chain.view_transactions()
-    ## response = {'transactions': transactions}
-    ##return jsonify(response), 200
-    return {}
 
 ## @app.route('/bootstrap/registerSelf', methods = ['POST'])
 def register_bootstrap():
@@ -112,7 +103,7 @@ def test():
 ## testing
 @app.route('/transaction/test', methods = ['GET'])
 def transactiontest():
-    return json.dumps([t.as_dict() for t in N.current_transactions])
+    return make_response(jsonify(json.dumps([t.as_dict() for t in N.current_transactions])), 200)
 
 ## testing
 @app.route('/transaction/create', methods = ['GET'])
@@ -124,17 +115,17 @@ def othertest():
             recipient_public_key = i.wallet.public_key
             t = N.create_transaction(recipient_public_key, amount = 10)
             N.broadcast_transaction(t)
-    return {}
+    return make_response({}, 200)
 
 ## testing
 @app.route('/node/test', methods = ['GET'])
 def test3():
-    return json.dumps({'name': N.name, 'balance': N.wallet.balance()})
+    return make_response(jsonify(json.dumps({'name': N.name, 'balance': N.wallet.balance()})), 200)
 
 ## testing
 @app.route('/node/test4', methods = ['GET'])
 def test4():
-    return json.dumps({'response': str(N.chain)})
+    return make_response(jsonify(json.dumps({'response': str(N.chain)})), 200)
 
 ## receive transaction
 @app.route('/transaction', methods = ['POST'])
@@ -142,7 +133,7 @@ def receive_transaction():
     request_data = json.loads(request.get_json(force = True))
     t = Transaction(**request_data)
     N.receive_transaction(t)
-    return {}
+    return make_response({}, 200)
 
 ## receive block
 @app.route('/block', methods = ['POST'])
@@ -154,7 +145,7 @@ def receive_block():
     request_data['list_of_transactions'] = tl
     b = Block(**request_data)
     N.receive_block(b)
-    return {}
+    return make_response({}, 200)
 
 ## receive chain
 @app.route('/chain', methods = ['POST'])
@@ -169,11 +160,38 @@ def receive_chain():
         bc.append(Block(**b))
     c = Blockchain(bc)
     N.receive_chain(c)
-    return {}
+    return make_response({}, 200)
+
+## OPERATIONS REQUIRED FOR CLI
+@app.route('/node/transaction/create', methods = ['POST'])
+def create_transaction():
+    request_data = json.loads(request.get_json(force = True))
+    recipient_public_key = request_data['recipient_public_key']
+    amount = request_data['amount']
+    t = N.create_transaction(recipient_public_key, amount = amount)
+    N.broadcast_transaction(t)
+    return make_response(jsonify(json.dumps(t.as_dict())), 200)
+
+@app.route('/node/transaction/view', methods = ['GET'])
+def view_transactions():
+    res = {'chain': N.chain.as_dict(), 'str': N.chain.view_transactions()}
+    return make_response(jsonify(json.dumps(res)), 200)
+
+@app.route('/node/balance', methods = ['GET'])
+def get_balance():
+    res = {'balance': N.wallet.balance()}
+    return make_response(jsonify(json.dumps(res)), 200)
+
+@app.route('/node/info', methods = ['GET'])
+def get_information():
+    res = {'info': str(N)}
+    return make_response(jsonify(json.dumps(res)), 200)
 
 @app.route('/node/stats', methods = ['GET'])
 def get_statistics():
-    return json.dumps(N.get_statistics())
+    return make_response(jsonify(json.dumps(N.get_statistics())), 200)
+    ## https://flask.palletsprojects.com/en/2.2.x/api/#flask.make_response
+    ## https://flask.palletsprojects.com/en/2.2.x/api/#flask.json.jsonify
 
 ## run it once fore every node
 ## TODO!! DIFFERENTIATE BETWEEN BOOTSTRAP AND OTHERS IN A BETTER WAY

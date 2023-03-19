@@ -52,7 +52,15 @@ class Transaction:
 
     def __str__(self):
         try:
-            return f'TRANSACTION {self.transaction_hash}\nSENDER: {self.sender_public_key}\nRECIPIENT: {self.recipient_public_key}\nAMOUNT:{self.amount}\nINPUTS:{self.transaction_inputs}\nOUTPUTS:{self.transaction_outputs}'
+            s = 'TRANSACTION {}\nSENDER:\n{}\nRECIPIENT:\n{}\nAMOUNT: {}\nINPUTS:\n{}\nOUTPUTS:\n{}\n'.format(
+                self.transaction_hash,
+                self.sender_public_key,
+                self.recipient_public_key,
+                self.amount,
+                self.transaction_inputs,
+                self.transaction_outputs
+            ) + '*' * 50 + '\n'
+            return s
         except Exception as e:
             print('Cannot print unsigned transaction')
 

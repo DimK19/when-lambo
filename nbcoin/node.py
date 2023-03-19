@@ -29,6 +29,9 @@ class Node:
 		self.chain = Blockchain()
 		self.id = -1
 
+	def __str__(self):
+		return f'NODE {self.id}:\nNAME {self.name}\nIP   {self.ip}\nPORT {self.port}'
+
 	def set_ip_and_port(self, ip, port):
 		self.ip = ip
 		self.port = port
@@ -534,7 +537,7 @@ class Node:
 		self.chain = max_chain
 
 	def get_statistics(self):
-		number_of_valid_transactions = len(self.chain) * config['EXPERIMENTS']['BLOCK_CAPACITY']
+		number_of_valid_transactions = len(self.chain) * int(config['EXPERIMENTS']['BLOCK_CAPACITY'])
 		return {
 			'average_block_time': self.total_block_time / len(self.chain),
 			'throughput': number_of_valid_transactions / (self.timestamp_of_latest_transaction - self.timestamp_of_first_transaction)
