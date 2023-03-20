@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card">
+    <div class="card-body">
+        <h5 class="card-title text-dark">Your wallet</h5>
+    </div>
+    <ul class="list-group list-group-flush">
+        <li class="list-group-item"><strong>Balance: </strong>{{balance}}</li>
+        <li class="list-group-item"><strong>Public Key: </strong>{{public_key}}</li>
+        <li class="list-group-item"><strong>Private Key: </strong>{{private_key}}</li>
+    </ul>
+</div>
+{% endblock %}

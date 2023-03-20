@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h3 class="mb-3 text-dark">Latest validated block</h3>
+<div style="overflow: auto;">
+{% for t in list_of_transactions %}
+    <div class="card mb-3">
+        <div class="card-body">
+            <h5 class="card-title text-dark">Transaction</h5>
+            <p class="card-text text-dark"><strong>Hash: </strong>{{t.transaction_hash}}</p>
+        </div>
+        <ul class="list-group list-group-flush">
+            <li class="list-group-item"><strong>Amount: </strong>{{t.amount}}</li>
+            <li class="list-group-item"><strong>Sender: </strong>{{t.sender_public_key}}</li>
+            <li class="list-group-item"><strong>Recipient: </strong>{{t.recipient_public_key}}</li>
+        </ul>
+    </div>
+{% endfor %}
+</div>
+{% endblock %}

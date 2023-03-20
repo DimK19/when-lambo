@@ -36,6 +36,7 @@ with concurrent.futures.ThreadPoolExecutor(max_workers = int(config['EXPERIMENTS
             responses.append(data)
         except Exception as e:
             print(e)
+    ## https://superfastpython.com/threadpoolexecutor-wait-all-tasks/
     concurrent.futures.wait(future_to_url)
     end = perf_counter()
     print(f'Finished conducting experiment in {end - start}s')

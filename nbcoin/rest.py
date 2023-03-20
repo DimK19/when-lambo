@@ -4,6 +4,7 @@ import json
 import configparser
 from time import sleep
 from random import random
+from copy import deepcopy
 
 from flask import Flask, jsonify, request, make_response
 from flask_cors import CORS
@@ -188,6 +189,7 @@ def create_transaction():
         N.broadcast_transaction(t)
         return make_response(jsonify(json.dumps(t.as_dict())), 200)
     except Exception as e:
+        print(e)
         return make_response({}, 422)
         ## https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/422
 
@@ -233,6 +235,17 @@ def conduct_experiment():
                 ## print(e)
                 pass
     return make_response({}, 200)
+
+## ------------------------------------------------------------------------------------------------
+## FOR GUI
+@app.route('/node', methods = ['GET'])
+def get_node():
+    return make_response(jsonify(json.dumps(deepcopy(N.as_dict()))), 200)
+
+@app.route('/ring', methods = ['GET'])
+def get_ring():
+    res = deepcopy({'ring': [x.as_dict() for x in N.ring]})
+    return make_response(jsonify(json.dumps(res)), 200)
 
 ## run it once fore every node
 ## TODO!! DIFFERENTIATE BETWEEN BOOTSTRAP AND OTHERS IN A BETTER WAY

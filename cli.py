@@ -10,9 +10,16 @@ host = args.host
 port = args.port
 base_url = f'http://{host}:{port}/node'
 
+## get ring
+ring_res = requests.get(f'http://{host}:{port}/ring')
+ring = json.loads(ring_res.json())['ring']
+id_to_key = {}
+for i in ring:
+    id_to_key[int(i['id'])] = i['wallet']['public_key']
+
 HELP_MESSAGE = """
 WHOAMI                                Displays the connected node's information.
-T [RECIPIENT_ADDRESS] [AMOUNT]        Creates transaction of AMOUNT from you to RECIPIENT_ADDRESS (public key) and broadcasts it.
+T [RECIPIENT_ADDRESS] [AMOUNT]        Creates transaction of AMOUNT from you to RECIPIENT_ADDRESS (id) and broadcasts it.
 VIEW                                  Displays all transactions in the latest validated block.
 BALANCE                               Displays your wallet's total funds.
 STATS                                 Displays statistics for the wallet.
@@ -32,16 +39,19 @@ while True:
             print(f'Error {response.status_code}')
     elif(cli_input[0].lower() == 't'):
         try:
-            recipient_public_key = cli_input['1']
-            amount = float(cli_input['2'])
-        except ValueError as e:
+            recipient_id = int(cli_input[1])
+            amount = float(cli_input[2])
+            recipient_public_key = id_to_key[recipient_id]
+        except Exception as e:
             print('Invalid command. Type "help" for more information.')
+            print(e)
             continue
         request_url = base_url + '/transaction/create'
-        response = requests.post(request_url, json.dumps({'recipient_public_key': recipient_public_key, 'amout': amount}))
+        response = requests.post(request_url, json = json.dumps({'recipient_public_key': recipient_public_key, 'amount': amount}))
         if(response.status_code == 200):
-            print('Success:')
-            print(response)
+            print('Success')
+            ##text = json.loads(response.json())
+            ##print(text)
         else:
             print(f'Error {response.status_code}')
 
