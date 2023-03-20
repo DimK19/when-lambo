@@ -69,13 +69,6 @@ def recreate_node(data):
 def register_node():
     data = json.loads(request.get_json(force = True))
     n = recreate_node(data)
-    '''
-    n = Node(data['name'])
-    n.set_ip_and_port(data['ip'], data['port'])
-    n.wallet = Wallet()
-    n.wallet.private_key = data['wallet']['private_key']
-    n.wallet.public_key = data['wallet']['public_key']
-    '''
     N.register_node_to_ring(n)
     return {}
 
@@ -263,11 +256,3 @@ if(__name__ == '__main__'):
     app.run(host = host, port = port)
     ## LIFESAVER https://stackoverflow.com/a/16664376
     ## https://requests.readthedocs.io/en/latest/api/#lower-level-classes
-
-'''
-change blockchain from none to empty
-save confing of bootstrap ip to register other nodes
-finalize node registration
-move on to transactioan
-transaction val error messages
-'''

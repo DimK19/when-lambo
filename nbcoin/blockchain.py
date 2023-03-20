@@ -2,8 +2,6 @@ from io import StringIO
 from copy import deepcopy
 
 class Blockchain:
-    """
-    """
     ## again default arg for endpoint initializaiton
     def __init__(self, chain = []):
         self.chain = deepcopy(chain)

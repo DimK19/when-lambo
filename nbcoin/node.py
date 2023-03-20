@@ -96,9 +96,6 @@ class Node:
 	## add this node to the ring, only the bootstrap node can add a node to the ring after checking his wallet and ip:port address
 	## bootstrap node informs all other nodes and gives the request node an id and 100 NBCs
 	def register_node_to_ring(self, new_node):
-		## public_key = n['wallet']['public_key']
-		## ip = n['ip']
-		## port = n['port']
 		public_key = new_node.wallet.public_key
 		ip = new_node.ip
 		port = new_node.port
@@ -106,18 +103,11 @@ class Node:
 			if(self.id == 0):
 				## Do not insert again on duplicate request
 				for n in self.ring:
-					## if(n['wallet']['public_key'] == public_key):
 					if(n.wallet.public_key == public_key):
 						raise Exception("Cannot register a node that has been registered already")
 				## accepted
 				new_node.set_id(len(self.ring))
 				self.ring.append(new_node)
-				'''
-				if(len(self.ring) == int(config['EXPERIMENTS']['NODES'])):
-					self.initialize_network()
-				else:
-					print(f"Not enough nodes yet, I have {len(self.ring)} and expect {config['EXPERIMENTS']['NODES']}")
-				'''
 			else: raise Exception("Only bootstrap can register nodes")
 		except Exception as e:
 			print(e)
@@ -125,7 +115,6 @@ class Node:
 
 	## create initial transaction to boostrap and genesis block
 	def create_genesis(self):
-		## self.create_transaction(self.wallet.public_key, 100 * int(config['EXPERIMENTS']['NODES']))
 		## create seminal transaction manually not with the function I can't
 		## be bothered to fix it
 		t = Transaction(
@@ -146,14 +135,7 @@ class Node:
 				leading_zeroes = int(config['EXPERIMENTS']['MINING_DIFFICULTY'])
 			)
 			b = future.result()
-		'''
-		b = self.mine_block(
-			tl = deepcopy(self.current_transactions),
-			previous_hash = self.chain,
-			g = True,
-			leading_zeroes = int(config['EXPERIMENTS']['MINING_DIFFICULTY'])
-		)
-		'''
+
 		## print('BELOW SHOULD BE FALSE') - DEEPCOPY
 		## print(b.list_of_transactions[0] is t)
 		B = Blockchain()
@@ -192,7 +174,6 @@ class Node:
 		if(self.id != 0):
 			raise Exception('Operation only allowed to the boostrap node')
 		for n in self.ring:
-			## TODOOOO!!! AAAAAAAAAAAAAAAA WITH REQUEST WHEN I BROADCAST TO ALL NODES
 			request_url = f'http://{n.ip}:{n.port}/node/ring'
 			r = deepcopy(self.ring)
 			serializable = [x.as_dict() for x in r]
@@ -266,6 +247,7 @@ class Node:
 		self.ring.sort(key = lambda x: x.id)
 
 		self.current_transactions.append(t)
+		## if at capacity mine
 		if(len(self.current_transactions) == int(config['EXPERIMENTS']['BLOCK_CAPACITY'])):
 			temp = deepcopy(self.current_transactions)
 			with concurrent.futures.ThreadPoolExecutor() as executor:
@@ -277,29 +259,13 @@ class Node:
 					leading_zeroes = int(config['EXPERIMENTS']['MINING_DIFFICULTY'])
 				)
 				b = future.result()
-			'''
-			self.mine_block(
-				tl = temp,
-				previous_hash = self.chain.get_latest_block_hash(),
-				g = False,
-				leading_zeroes = int(config['EXPERIMENTS']['MINING_DIFFICULTY'])
-			)
-			'''
 			self.chain.add_block(b)
 			self.current_transactions = []
-		## TODO I do not know what this does
-		## self.wallet.transactions.append(t)
-		## self.all_trans_ids.add(t.transaction_id)
-		## TODO!!! append to list and increment counter
-		## if at capacity mine
 		return t
 
 
 	## Utility broadcast function, broadcasts a general message to every other node
-	## TODO use thread pool maybe
 	def broadcast(self, message, urlparam):
-		## headers of http post request
-		## headers = {'Content-type': 'application/json', 'Accept': 'text/plain'}
 		def send_request(request_url):
 			requests.post(request_url, json = message) ##, headers = headers)
 		responses = []
@@ -319,25 +285,12 @@ class Node:
 		self.broadcast(message = json.dumps(b.as_dict()), urlparam = 'block')
 
 	def broadcast_chain(self):
-		##print(f'INSIDE BROADCAST CHAIN\nDATA TO BE BROADCAST {json.dumps(self.chain.as_dict())}')
-		##print(f'EVEN THOUGH THE CHAIN IS {self.chain}')
-		##print(f'AND AS DICT {self.chain.as_dict()}')
 		self.broadcast(message = json.dumps(self.chain.as_dict()), urlparam = 'chain')
 
 	def mine_block(self, tl: [Transaction], previous_hash, g: bool, leading_zeroes: int) -> Block:
-		##print(f'INSIDE MINE BLOCK')
-		##print('OH BOY OH BOY TIME TO MINE')
-		##print(f'MY CURRENT CHAIN IS:\n{self.chain}')
-
 		b = Block(genesis = g, previous_hash = previous_hash, list_of_transactions = tl)
-		'''
-		for t in tl:
-			## the importance of deepcopy
-			b.add_transaction(t)
-		'''
 		start = perf_counter()
 		hash = b.__hash__() ## nonce is initialized to 0
-		## TODO str might be a bug
 		while(not str(hash).startswith('0' * leading_zeroes)): ## condition not met
 			b.nonce += 1 ## try next nonce
 			hash = b.__hash__()
@@ -355,19 +308,6 @@ class Node:
 			self.current_transactions.append(t)
 			if(len(self.current_transactions) == int(config['EXPERIMENTS']['BLOCK_CAPACITY'])):
 				temp = deepcopy(self.current_transactions)
-				'''
-				thr = threading.Thread(
-					target = self.mine_block,
-					args = (
-						tl = temp,
-						previous_hash = self.chain.get_latest_block_hash(),
-						g = False,
-						leading_zeroes = int(config['EXPERIMENTS']['MINING_DIFFICULTY'])
-					)
-				)
-				thr.start()
-				thr.join()
-				'''
 				## https://docs.python.org/3/library/concurrent.futures.html#concurrent.futures.Executor.submit
 				## https://stackoverflow.com/a/58829816
 				with concurrent.futures.ThreadPoolExecutor() as executor:
@@ -381,20 +321,10 @@ class Node:
 					b = future.result()
 
 				self.chain.add_block(b)
-				'''
-				self.mine_block(
-					tl = temp,
-					previous_hash = self.chain.get_latest_block_hash(),
-					g = False,
-					leading_zeroes = int(config['EXPERIMENTS']['MINING_DIFFICULTY'])
-				)
-				'''
 				self.current_transactions = []
 		else:
 			print('Transaction rejected')
 
-	## TODO I have no idea what this does just fking copied it
-	## Please find out
 	def verify_signature(self, t: Transaction) -> bool:
 		key = RSA.import_key(t.sender_public_key)
 		h = t.generate_transaction_hash()
@@ -433,18 +363,9 @@ class Node:
 		if(not verified):
 			print('rejected because of signature')
 			return False
-		'''
-		for utxo in t.transaction_inputs:
-			if(not utxo in sender_in_ring.wallet.utxos):
-				print('rejected for atxos')
-				return False
-		'''
 		## at this point transaction is considered valid
 
-		## print(f'TRANSACTION SUMMARY: {t}')
-		## print(f'SENDER IN RING {sender_in_ring.wallet.utxos}')
 		for utxo in t.transaction_inputs:
-			## print(f'ATXO TO REMOVE: {utxo}')
 			try:
 				sender_in_ring.wallet.utxos.remove(utxo)
 			except Exception as e:
@@ -487,14 +408,6 @@ class Node:
 		## validate all transactions in block
 		## keep backup because validate_transaction alters it
 		## AHAAHHAHA NO
-		'''
-		all_nodes_utxos_backup = deepcopy(self.all_nodes_utxos)
-		for t in b.list_of_transactions:
-			if(not self.validate_transaction(t)):
-				print('Transaction validation failed - block rejected')
-				self.all_nodes_utxos = all_nodes_utxos_backup
-				return 0
-		'''
 
 		## validate proof of work
 		if(not self.validate_proof_of_work(b, int(config['EXPERIMENTS']['MINING_DIFFICULTY']))):
@@ -508,7 +421,6 @@ class Node:
 	def receive_chain(self, c: Blockchain):
 		## if(self.validate_chain(c)):
 		self.chain = c
-		##print(f'I AM {self.name} AND NOW MY CHAIN IS {self.chain}')
 		## TODO pretend to validate
 
 	## For a new node entering the network
@@ -519,12 +431,10 @@ class Node:
 				return False
 		return True
 
-	## TODO mining diff param
 	def validate_proof_of_work(self, b: Block, diff: int) -> bool:
 		return str(b.hash).startswith('0' * diff)
 
 	## consensus functions
-	## also maybe thread pool
 	## TODO what if I don't find it
 	def resolve_conflict(self):
 		max_chain = self.chain

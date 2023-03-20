@@ -27,8 +27,6 @@ def foo(url):
 start = perf_counter()
 responses = []
 with concurrent.futures.ThreadPoolExecutor(max_workers = int(config['EXPERIMENTS']['NODES'])) as executor:
-    ##for i in addresses:
-    ##    executor.submit(foo, i + '/experiment')
     future_to_url = (executor.submit(foo, url + '/experiment') for url in addresses)
     for future in concurrent.futures.as_completed(future_to_url):
         try:
