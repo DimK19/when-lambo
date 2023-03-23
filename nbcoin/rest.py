@@ -245,7 +245,7 @@ def get_ring():
 if(__name__ == '__main__'):
     parser = ArgumentParser()
     parser.add_argument('-p', '--port', default = 5000, type = int)
-    parser.add_argument('-i', '--host', default = '127.0.0.1', type = str)
+    parser.add_argument('-i', '--host', default = '0.0.0.0', type = str)
     parser.add_argument('-n', '--name', default = 'Lambo', type = str)
     args = parser.parse_args()
     host = args.host

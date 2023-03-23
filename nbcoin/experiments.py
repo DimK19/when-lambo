@@ -6,6 +6,7 @@ from time import perf_counter, sleep
 config = configparser.ConfigParser()
 config.read('constants.ini')
 
+"""
 addresses = [
 'http://127.0.0.1:5000',
 'http://127.0.0.1:2000',
@@ -13,12 +14,29 @@ addresses = [
 'http://127.0.0.1:4000',
 'http://127.0.0.1:6000'
 ]
+"""
+## MASTER snf-35408.ok-kno.grnetcloud.net
+## NODE1 snf-35410.ok-kno.grnetcloud.net
+## NODE2 snf-35390.ok-kno.grnetcloud.net
+## NODE3 snf-35391.ok-kno.grnetcloud.net
+## NODE4 snf-35392.ok-kno.grnetcloud.net
+addresses = [
+'http://snf-35408.ok-kno.grnetcloud.net',
+'http://snf-35410.ok-kno.grnetcloud.net',
+'http://snf-35390.ok-kno.grnetcloud.net',
+'http://snf-35391.ok-kno.grnetcloud.net',
+'http://snf-35392.ok-kno.grnetcloud.net'
+]
 
-requests.get('http://127.0.0.1:2000/node/register')
-requests.get('http://127.0.0.1:3000/node/register')
-requests.get('http://127.0.0.1:4000/node/register')
-requests.get('http://127.0.0.1:6000/node/register')
-requests.get('http://127.0.0.1:5000/bootstrap/initialize')
+requests.get(addresses[1] + '/node/register')
+sleep(1)
+requests.get(addresses[2] + '/node/register')
+sleep(1)
+requests.get(addresses[3] + '/node/register')
+sleep(1)
+requests.get(addresses[4] + '/node/register')
+sleep(1)
+requests.get(addresses[0] + '/bootstrap/initialize')
 sleep(10)
 
 def foo(url):

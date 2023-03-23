@@ -91,7 +91,7 @@ class Node:
 
 	## send registration request to bootstrap node's address
 	def send_registration_request(self):
-		requests.post('http://127.0.0.1:5000/bootstrap/registerNode', json = json.dumps(self.as_dict()))
+		requests.post(f"http://{config['NETWORK']['BOOTSTRAP_ADDRESS']}/bootstrap/registerNode", json = json.dumps(self.as_dict()))
 
 	## add this node to the ring, only the bootstrap node can add a node to the ring after checking his wallet and ip:port address
 	## bootstrap node informs all other nodes and gives the request node an id and 100 NBCs
@@ -382,13 +382,11 @@ class Node:
 
 	## Upon receiving block
 	def receive_block(self, b: Block):
-		match self.validate_block(b):
-			case 0: ## reject
-				pass
-			case 1:
-				self.resolve_conflict()
-			case 2:
-				self.add_block_to_chain(b)
+		if(self.validate_block(b) == 1):
+			self.resolve_conflict()
+		elif(self.validate_block(b) == 2):
+			self.add_block_to_chain(b)
+		## if it is 0 reject
 
 	def validate_block(self, b: Block) -> int:
 		"""
