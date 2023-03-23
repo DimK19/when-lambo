@@ -23,12 +23,11 @@ N = Node()
 config = configparser.ConfigParser()
 config.read('constants.ini')
 
-## @app.route('/bootstrap/registerSelf', methods = ['POST'])
-def register_bootstrap():
+def register_bootstrap(host):
     ## is_boostrap inside request
     ## name from request object
     N.set_name('Countach')
-    N.set_ip_and_port('127.0.0.1', 5000)
+    N.set_ip_and_port(host, 5000)
     N.generate_wallet()
     N.register_bootstrap()
     ## else register node if not bootstrap
@@ -252,7 +251,7 @@ if(__name__ == '__main__'):
     port = args.port
     name = args.name
     if(port != 5000): create_node(name, host, port)
-    else: register_bootstrap()
+    else: register_bootstrap(host)
     app.run(host = host, port = port)
     ## LIFESAVER https://stackoverflow.com/a/16664376
     ## https://requests.readthedocs.io/en/latest/api/#lower-level-classes
