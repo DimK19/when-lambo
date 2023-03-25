@@ -34,18 +34,10 @@ def register_bootstrap(host):
     return {}
 
 ## vm creates node and sends registration request
-## @app.route('/node/create', methods = ['POST'])
 def create_node(name, ip, port):
-    ## is_boostrap inside request
-    ## name from request object
-    ##name = request.form.get(name)
-    ##ip = request.form.get(ip)
-    ##port = request.form.get(port)
     N.set_name(name)
     N.set_ip_and_port(ip, port)
     N.generate_wallet()
-    ## N.send_registration_request()
-    ## else register node if not bootstrap
     return {}
 
 @app.route('/node/register', methods = ['GET'])
