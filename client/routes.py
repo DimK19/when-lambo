@@ -7,6 +7,8 @@ import json
 ## node simply as dict from response for the purposes of this app
 N = None
 ring = None
+## Monkeypatch to make it run on vm, replace all instances of N['ip']:N['port']
+ADDRESS = 'snf-35460.ok-kno.grnetcloud.net:5000'
 
 ### Αρχική Σελίδα ###
 @app.route('/home/')

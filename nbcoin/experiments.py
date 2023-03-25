@@ -6,7 +6,8 @@ from time import perf_counter, sleep
 config = configparser.ConfigParser()
 config.read('constants.ini')
 
-"""
+## FOR LOCAL TESTING
+
 addresses = [
 'http://127.0.0.1:5000',
 'http://127.0.0.1:2000',
@@ -15,18 +16,14 @@ addresses = [
 'http://127.0.0.1:6000'
 ]
 """
-## MASTER snf-35408.ok-kno.grnetcloud.net
-## NODE1 snf-35410.ok-kno.grnetcloud.net
-## NODE2 snf-35390.ok-kno.grnetcloud.net
-## NODE3 snf-35391.ok-kno.grnetcloud.net
-## NODE4 snf-35392.ok-kno.grnetcloud.net
 addresses = [
-'http://snf-35408.ok-kno.grnetcloud.net',
-'http://snf-35410.ok-kno.grnetcloud.net',
-'http://snf-35390.ok-kno.grnetcloud.net',
-'http://snf-35391.ok-kno.grnetcloud.net',
-'http://snf-35392.ok-kno.grnetcloud.net'
+'http://192.168.0.5:5000',
+'http://192.168.0.1:2000',
+'http://192.168.0.2:3000',
+'http://192.168.0.3:4000',
+'http://192.168.0.4:6000'
 ]
+"""
 
 requests.get(addresses[1] + '/node/register')
 sleep(1)
@@ -53,10 +50,6 @@ with concurrent.futures.ThreadPoolExecutor(max_workers = int(config['EXPERIMENTS
         except Exception as e:
             print(e)
     ## https://superfastpython.com/threadpoolexecutor-wait-all-tasks/
-    concurrent.futures.wait(future_to_url)
+    ## concurrent.futures.wait(future_to_url)
     end = perf_counter()
     print(f'Finished conducting experiment in {end - start}s')
-
-    for i in addresses:
-        executor.submit(foo, i + '/node/stats')
-    print('Saved results to text files')

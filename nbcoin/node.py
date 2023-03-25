@@ -202,15 +202,10 @@ class Node:
 		sender_in_ring = None
 		recipient_in_ring = None
 		for n in self.ring:
-			print(list(n.wallet.public_key))
 			if(n.wallet.public_key == recipient_public_key):
 				recipient_in_ring = n
 			if(n.wallet.public_key == self.wallet.public_key):
 				sender_in_ring = n
-
-		if(recipient_in_ring is None):
-			print('could not find node with')
-			print(list(recipient_public_key))
 
 		## remove utxos from inputs, the change will be returned as output of the new transaction
 		for utxo in transaction_inputs:
